@@ -1,78 +1,103 @@
-import React from 'react';
-import { Download, FileText } from 'lucide-react';
+'use client';
 
-export default function IncidentLogger({ logs = [] }) {
-  const downloadCSV = () => {
-    if (!logs.length) return;
-    const headers = ['Timestamp,Temperature(C),DO(mg/L),pH,Turbidity(NTU),WQI,PumpStatus\n'];
-    const rows = logs.map(l => `${l.timestamp},${l.temperature},${l.estimatedDO},${l.ph},${l.turbidity},${l.wqi},${l.pumpStatus}`);
-    const blob = new Blob([headers.concat(rows).join('\n')], { type: 'text/csv' });
+import { useState, useEffect } from 'react';
+import { Download, AlertCircle } from 'lucide-react';
+import { calculateSubIndices } from '@/lib/mathModels';
+
+export default function IncidentLogger({ data = {} }) {
+  const [incidents, setIncidents] = useState([]);
+
+  useEffect(() => {
+    if (!data.timestamp) return;
+
+    const { wqi } = calculateSubIndices(data);
+    const isHypoxia = (data.estimatedDo ?? 7.0) < 5.0;
+    const isCriticalPh = (data.ph ?? 7.0) < 6.0 || (data.ph ?? 7.0) > 8.8;
+    const isHighTurbidity = (data.turbidity ?? 0) > 30;
+
+    if (isHypoxia || isCriticalPh || isHighTurbidity) {
+      const newIncident = {
+        timestamp: data.timestamp,
+        temp: (data.temperature ?? 0).toFixed(1),
+        do: (data.estimatedDo ?? 0).toFixed(2),
+        ph: (data.ph ?? 0).toFixed(1),
+        turbidity: data.turbidity ?? 0,
+        wqi,
+        pump: data.pumpStatus ? 'ON' : 'OFF',
+      };
+
+      setIncidents((prev) => {
+        if (prev.length > 0 && prev[0].timestamp === newIncident.timestamp) return prev;
+        return [newIncident, ...prev].slice(0, 5);
+      });
+    }
+  }, [data]);
+
+  const exportCSV = () => {
+    if (incidents.length === 0) return;
+    const headers = 'Timestamp,Temp(C),DO(mg/L),pH,Turbidity(NTU),WQI,Pump\n';
+    const rows = incidents
+      .map((i) => `${i.timestamp},${i.temp},${i.do},${i.ph},${i.turbidity},${i.wqi},${i.pump}`)
+      .join('\n');
+    const blob = new Blob([headers + rows], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `proof_of_loss_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `AeroAqua_PMMSY_Log_${Date.now()}.csv`;
     a.click();
   };
 
   return (
-    <div className="bg-cardbg border border-bordercolor rounded-xl p-5 w-full">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+    <div className="p-5 bg-slate-900/80 rounded-2xl border border-slate-800 flex flex-col justify-between shadow-lg">
+      <div className="flex items-center justify-between mb-3">
         <div>
-          <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
-            <FileText className="w-4 h-4 text-accentyellow" />
-            Proof-of-Loss Incident Log (PMMSY Compliance)[cite: 1, 2]
+          <h3 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-amber-400" /> Proof-of-Loss Incident Log (PMMSY)
           </h3>
-          <p className="text-xs text-gray-400 mt-0.5">Automated timestamped logging for hypoxia & severe quality events[cite: 1, 2].</p>
+          <p className="text-xs text-slate-400 mt-0.5">Automated timestamped logging for hypoxia & severe quality events.</p>
         </div>
         <button
-          onClick={downloadCSV}
-          disabled={!logs.length}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-accentblue/10 border border-accentblue/30 text-accentblue hover:bg-accentblue/20 transition-all text-xs font-semibold disabled:opacity-50"
+          onClick={exportCSV}
+          disabled={incidents.length === 0}
+          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-cyan-400 border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all"
         >
-          <Download className="w-4 h-4" />
-          Export PMMSY CSV[cite: 1, 2]
+          <Download className="w-3.5 h-3.5" /> Export PMMSY CSV
         </button>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs text-gray-300">
-          <thead className="bg-darkbg text-gray-400 border-b border-bordercolor">
-            <tr>
-              <th className="p-2.5">Timestamp</th>
-              <th className="p-2.5">Temp (°C)</th>
-              <th className="p-2.5">DO (mg/L)</th>
-              <th className="p-2.5">pH</th>
-              <th className="p-2.5">Turbidity</th>
-              <th className="p-2.5">WQI</th>
-              <th className="p-2.5">Pump</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-bordercolor font-mono">
-            {logs.length === 0 ? (
-              <tr>
-                <td colSpan="7" className="p-4 text-center text-gray-500 font-sans">
-                  No critical mortality incidents recorded. Water parameters nominal.
-                </td>
+      <div className="overflow-x-auto my-2">
+        {incidents.length === 0 ? (
+          <div className="py-8 text-center text-xs text-slate-500 border border-dashed border-slate-800 rounded-xl bg-slate-950/40">
+            No critical mortality incidents recorded. Water parameters nominal.
+          </div>
+        ) : (
+          <table className="w-full text-left text-xs font-mono">
+            <thead>
+              <tr className="border-b border-slate-800 text-slate-400">
+                <th className="pb-2">Timestamp</th>
+                <th className="pb-2">Temp (°C)</th>
+                <th className="pb-2">DO (mg/L)</th>
+                <th className="pb-2">pH</th>
+                <th className="pb-2">Turbidity</th>
+                <th className="pb-2">WQI</th>
+                <th className="pb-2">Pump</th>
               </tr>
-            ) : (
-              logs.map((log, index) => (
-                <tr key={index} className="hover:bg-darkbg/50">
-                  <td className="p-2.5">{new Date(log.timestamp).toLocaleTimeString()}</td>
-                  <td className="p-2.5">{log.temperature?.toFixed(1)}</td>
-                  <td className="p-2.5 text-accentblue font-bold">{log.estimatedDO?.toFixed(2)}</td>
-                  <td className="p-2.5">{log.ph?.toFixed(1)}</td>
-                  <td className="p-2.5">{log.turbidity} NTU</td>
-                  <td className="p-2.5">{log.wqi}</td>
-                  <td className="p-2.5">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${log.pumpStatus === 1 ? 'bg-accentgreen/20 text-accentgreen' : 'bg-gray-800 text-gray-400'}`}>
-                      {log.pumpStatus === 1 ? 'ON' : 'OFF'}
-                    </span>
-                  </td>
+            </thead>
+            <tbody className="divide-y divide-slate-800/50">
+              {incidents.map((row, idx) => (
+                <tr key={idx} className="text-slate-300 hover:bg-slate-800/30">
+                  <td className="py-2 text-cyan-400">{row.timestamp}</td>
+                  <td className="py-2">{row.temp}</td>
+                  <td className="py-2 text-amber-400">{row.do}</td>
+                  <td className="py-2">{row.ph}</td>
+                  <td className="py-2">{row.turbidity}</td>
+                  <td className="py-2 text-emerald-400">{row.wqi}</td>
+                  <td className="py-2">{row.pump}</td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );

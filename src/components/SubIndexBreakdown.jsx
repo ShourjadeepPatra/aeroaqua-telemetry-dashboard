@@ -1,37 +1,39 @@
-import React from 'react';
+'use client';
 
-export default function SubIndexBreakdown({ subIndices }) {
-  const { Q_DO = 0, Q_pH = 0, Q_T = 0, Q_Turb = 0 } = subIndices || {};
+import { calculateSubIndices } from '@/lib/mathModels';
 
-  const items = [
-    { label: 'Dissolved Oxygen (Q_DO)', value: Q_DO, weight: '37.0%', color: 'bg-accentblue' },
-    { label: 'pH Balance (Q_pH)', value: Q_pH, weight: '23.9%', color: 'bg-accentgreen' },
-    { label: 'Thermal Stability (Q_T)', value: Q_T, weight: '21.7%', color: 'bg-accentyellow' },
-    { label: 'Turbidity Clarity (Q_Turb)', value: Q_Turb, weight: '17.4%', color: 'bg-purple-500' },
+export default function SubIndexBreakdown({ data = {} }) {
+  const { qDo, qPh, qTemp, qTurb } = calculateSubIndices(data);
+
+  const subIndices = [
+    { label: 'Dissolved Oxygen (Q_DO)', weight: '37.0%', value: qDo },
+    { label: 'pH Balance (Q_pH)', weight: '23.9%', value: qPh },
+    { label: 'Thermal Stability (Q_T)', weight: '21.7%', value: qTemp },
+    { label: 'Turbidity Clarity (Q_Turb)', weight: '17.4%', value: qTurb },
   ];
 
   return (
-    <div className="bg-cardbg border border-bordercolor rounded-xl p-5 w-full h-80 flex flex-col justify-between">
+    <div className="p-5 bg-slate-900/80 rounded-2xl border border-slate-800 flex flex-col justify-between shadow-lg">
       <div>
-        <h3 className="text-sm font-semibold text-gray-300 mb-1">NSF Sub-Index Breakdown</h3>
-        <p className="text-xs text-gray-400">Re-normalized Delphi consensus weightings for 4 parameters[cite: 1, 2].</p>
+        <h3 className="text-sm font-semibold text-slate-200">NSF Sub-Index Breakdown</h3>
+        <p className="text-xs text-slate-400 mt-0.5">Re-normalized Delphi consensus weightings for 4 parameters.</p>
       </div>
 
-      <div className="space-y-4 my-auto">
-        {items.map((item, idx) => (
-          <div key={idx} className="space-y-1">
+      <div className="space-y-4 my-4">
+        {subIndices.map((item, idx) => (
+          <div key={idx} className="space-y-1.5">
             <div className="flex justify-between items-center text-xs">
-              <span className="text-gray-300 font-medium">{item.label}</span>
-              <div className="flex items-center gap-2">
-                <span className="text-gray-500 font-mono">Weight: {item.weight}</span>
-                <span className="text-white font-bold font-mono">{item.value}/100</span>
+              <span className="text-slate-300 font-medium">{item.label}</span>
+              <div className="flex items-center gap-3">
+                <span className="text-slate-500 font-mono text-[11px]">Weight: {item.weight}</span>
+                <span className="font-bold text-slate-100 font-mono w-10 text-right">{item.value}/100</span>
               </div>
             </div>
-            <div className="w-full bg-darkbg rounded-full h-2 overflow-hidden border border-bordercolor">
+            <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800">
               <div
-                className={`h-2 rounded-full ${item.color} transition-all duration-500`}
-                style={{ width: `${Math.min(100, Math.max(0, item.value))}%` }}
-              ></div>
+                className="h-full bg-gradient-to-r from-cyan-500 to-teal-400 transition-all duration-500"
+                style={{ width: `${item.value}%` }}
+              />
             </div>
           </div>
         ))}

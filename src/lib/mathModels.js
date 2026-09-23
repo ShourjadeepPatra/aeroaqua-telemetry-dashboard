@@ -1,12 +1,8 @@
 /**
- * Calculates estimated Dissolved Oxygen (DO) saturation in water based on temperature using EPA empirical model equations.
- * @param {number} temp - Water temperature in Celsius
- * @returns {object} Calculated DO in mg/L and saturation percentage
+ * Calculates estimated Dissolved Oxygen (DO) saturation in water based on temperature.
  */
 export function calculateEPA_DO(temp) {
   const t = typeof temp === 'number' ? temp : 25;
-  
-  // Empirical approximation formula for DO concentration at 1 atm
   const doValue = 14.652 - 0.41022 * t + 0.007991 * Math.pow(t, 2) - 0.000077774 * Math.pow(t, 3);
   const clampedDo = Math.max(0, Math.min(15, doValue));
 
@@ -18,12 +14,6 @@ export function calculateEPA_DO(temp) {
 
 let currentEwma = null;
 
-/**
- * Updates Exponentially Weighted Moving Average (EWMA) baseline for temperature tracking.
- * @param {number} temp - Current temperature reading
- * @param {number} alpha - Smoothing factor (0 < alpha <= 1)
- * @returns {number} Smoothed baseline temperature
- */
 export function updateEWMA(temp, alpha = 0.15) {
   const t = typeof temp === 'number' ? temp : 25;
   if (currentEwma === null) {
@@ -34,14 +24,6 @@ export function updateEWMA(temp, alpha = 0.15) {
   return parseFloat(currentEwma.toFixed(2));
 }
 
-/**
- * Calculates vertical light attenuation coefficient (Kd) to measure water clarity and potential algae bloom risk.
- * Kd = -ln(I_submerged / I_surface) / depth
- * @param {number} surfaceLight - Lux/PAR at surface
- * @param {number} submergedLight - Lux/PAR at depth
- * @param {number} depthMeters - Measurement depth in meters (default 0.5m)
- * @returns {number} Attenuation index Kd
- */
 export function calculateKd(surfaceLight, submergedLight, depthMeters = 0.5) {
   const i0 = Math.max(1, surfaceLight || 800);
   const iz = Math.max(0.1, submergedLight || 350);
@@ -50,4 +32,59 @@ export function calculateKd(surfaceLight, submergedLight, depthMeters = 0.5) {
 
   const kd = -Math.log(iz / i0) / depthMeters;
   return parseFloat(Math.max(0, Math.min(10, kd)).toFixed(2));
+}
+
+/**
+ * Calculates Algae Bloom Probability (%) based on Kd attenuation and turbidity.
+ */
+export function calculateBloomRisk(kd = 0, turbidity = 0) {
+  const riskRaw = (kd / 3) * 60 + (turbidity / 100) * 40;
+  const probability = Math.min(100, Math.max(0, Math.round(riskRaw)));
+  
+  let status = 'LOW RISK';
+  let color = 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
+
+  if (probability > 70) {
+    status = 'CRITICAL RISK';
+    color = 'text-red-400 bg-red-500/10 border-red-500/20';
+  } else if (probability > 40) {
+    status = 'MODERATE RISK';
+    color = 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+  }
+
+  return { probability, status, color };
+}
+
+/**
+ * Calculates NSF Sub-Indices Q-scores and overall Water Quality Index (WQI).
+ */
+export function calculateSubIndices(data = {}) {
+  const doMgL = data.estimatedDo ?? 7.0;
+  const ph = data.ph ?? 7.0;
+  const temp = data.temperature ?? 25;
+  const turbidity = data.turbidity ?? 10;
+
+  // Q-DO (37.0% weight)
+  const qDo = Math.min(100, Math.max(0, Math.round((doMgL / 8.5) * 100)));
+
+  // Q-pH (23.9% weight)
+  const phDev = Math.abs(ph - 7.0);
+  const qPh = Math.min(100, Math.max(0, Math.round(100 - phDev * 20)));
+
+  // Q-T Thermal Stability (21.7% weight)
+  const qTemp = Math.min(100, Math.max(0, Math.round(100 - Math.abs(temp - 26) * 3)));
+
+  // Q-Turbidity (17.4% weight)
+  const qTurb = Math.min(100, Math.max(0, Math.round(Math.max(0, 100 - turbidity * 1.5))));
+
+  // Overall WQI Score
+  const wqi = Math.round(qDo * 0.37 + qPh * 0.239 + qTemp * 0.217 + qTurb * 0.174);
+
+  return {
+    qDo,
+    qPh,
+    qTemp,
+    qTurb,
+    wqi,
+  };
 }
