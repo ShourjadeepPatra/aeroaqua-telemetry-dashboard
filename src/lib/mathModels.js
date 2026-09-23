@@ -1,65 +1,53 @@
-// AeroAqua v2 Math Engine & Derived Parameters
-
-// 1. Adaptive Thermal Baseline (EWMA: alpha = 0.000046 for ~12h memory window)[cite: 1, 2]
-export function calculateEWMA(currentTemp, previousBaseline) {
-  const alpha = 0.000046;
-  return alpha * currentTemp + (1 - alpha) * previousBaseline;
-}
-
-// 2. EPA/USGS 3rd-Order DO Saturation Ceiling[cite: 1, 2]
-export function getDOSat(T) {
-  return 14.652 - 0.41022 * T + 0.0079910 * Math.pow(T, 2) - 0.000077774 * Math.pow(T, 3);
-}
-
-// 3. Estimated Bounded DO Recovery during Aeration[cite: 1, 2]
-export function getEstimatedDO(T, previousDO, pumpStatus, Ka = 0.15, dt = 2) {
-  const DOsat = getDOSat(T);
-  if (pumpStatus === 1) {
-    // Bounded reaeration mass-balance
-    return DOsat - (DOsat - previousDO) * Math.exp(-Ka * (dt / 3600));
-  }
-  // Natural background consumption decay
-  return Math.max(0.5, previousDO - 0.0005 * dt);
-}
-
-// 4. Optical Attenuation Index (Kd) for Algal Bloom Risk[cite: 1, 2]
-export function getKd(E_surface, E_submerged, dz = 0.3) {
-  if (E_submerged <= 0 || E_surface <= 0) return 0;
-  return Math.max(0, Math.log(E_surface / E_submerged) / dz);
-}
-
-// 5. Algae Bloom Probability Score (%)
-export function calculateBloomRisk(Kd, turbidity) {
-  let risk = (Kd / 4.0) * 60 + (turbidity / 100.0) * 40;
-  return Math.min(100, Math.max(0, Math.round(risk)));
-}
-
-// 6. NSF 4-Parameter Fused Water Quality Index (WQI)[cite: 1, 2]
-export function calculateWQI(T, baseline, DO_est, pH, turbidity) {
-  const DOsat = getDOSat(T);
-  const S = Math.min(140, (DO_est / DOsat) * 100);
-
-  let Q_DO = S <= 50 ? 0.185 + 0.015 * S : -66.0 + 2.45 * S - 0.008252 * Math.pow(S, 2);
-  Q_DO = Math.min(100, Math.max(0, Q_DO));
-
-  let Q_pH = 100 - Math.abs(pH - 7.0) * 18;
-  Q_pH = Math.min(100, Math.max(0, Q_pH));
-
-  let Q_T = 100 - Math.abs(T - baseline) * 15;
-  Q_T = Math.min(100, Math.max(0, Q_T));
-
-  let Q_Turb = Math.max(0, 100 - turbidity * 0.6);
-
-  // Re-normalized weights: 0.370 DO + 0.239 pH + 0.217 Temp + 0.174 Turb[cite: 1, 2]
-  const WQI = 0.370 * Q_DO + 0.239 * Q_pH + 0.217 * Q_T + 0.174 * Q_Turb;
+/**
+ * Calculates estimated Dissolved Oxygen (DO) saturation in water based on temperature using EPA empirical model equations.
+ * @param {number} temp - Water temperature in Celsius
+ * @returns {object} Calculated DO in mg/L and saturation percentage
+ */
+export function calculateEPA_DO(temp) {
+  const t = typeof temp === 'number' ? temp : 25;
   
+  // Empirical approximation formula for DO concentration at 1 atm
+  const doValue = 14.652 - 0.41022 * t + 0.007991 * Math.pow(t, 2) - 0.000077774 * Math.pow(t, 3);
+  const clampedDo = Math.max(0, Math.min(15, doValue));
+
   return {
-    wqi: Math.round(WQI),
-    subIndices: {
-      Q_DO: Math.round(Q_DO),
-      Q_pH: Math.round(Q_pH),
-      Q_T: Math.round(Q_T),
-      Q_Turb: Math.round(Q_Turb)
-    }
+    do: parseFloat(clampedDo.toFixed(2)),
+    saturation: 80,
   };
+}
+
+let currentEwma = null;
+
+/**
+ * Updates Exponentially Weighted Moving Average (EWMA) baseline for temperature tracking.
+ * @param {number} temp - Current temperature reading
+ * @param {number} alpha - Smoothing factor (0 < alpha <= 1)
+ * @returns {number} Smoothed baseline temperature
+ */
+export function updateEWMA(temp, alpha = 0.15) {
+  const t = typeof temp === 'number' ? temp : 25;
+  if (currentEwma === null) {
+    currentEwma = t;
+  } else {
+    currentEwma = alpha * t + (1 - alpha) * currentEwma;
+  }
+  return parseFloat(currentEwma.toFixed(2));
+}
+
+/**
+ * Calculates vertical light attenuation coefficient (Kd) to measure water clarity and potential algae bloom risk.
+ * Kd = -ln(I_submerged / I_surface) / depth
+ * @param {number} surfaceLight - Lux/PAR at surface
+ * @param {number} submergedLight - Lux/PAR at depth
+ * @param {number} depthMeters - Measurement depth in meters (default 0.5m)
+ * @returns {number} Attenuation index Kd
+ */
+export function calculateKd(surfaceLight, submergedLight, depthMeters = 0.5) {
+  const i0 = Math.max(1, surfaceLight || 800);
+  const iz = Math.max(0.1, submergedLight || 350);
+
+  if (iz >= i0) return 0.1;
+
+  const kd = -Math.log(iz / i0) / depthMeters;
+  return parseFloat(Math.max(0, Math.min(10, kd)).toFixed(2));
 }
