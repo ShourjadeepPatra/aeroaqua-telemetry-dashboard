@@ -1,79 +1,92 @@
-import React from 'react';
-import { Chart as ChartJS } from 'chart.js';
-import { Line } from 'react-chartjs-2';
+'use client';
 
-export default function PhTurbidityChart({ telemetry }) {
-  const chartData = {
+import { Line } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend
+);
+
+export default function PhTurbidityChart({ history = [] }) {
+  const data = {
+    labels: history.map((item) => item.timestamp),
     datasets: [
       {
         label: 'pH Level',
-        borderColor: '#10B981',
-        backgroundColor: '#10B981',
+        data: history.map((item) => item.ph),
+        borderColor: '#10b981',
+        backgroundColor: 'rgba(16, 185, 129, 0.1)',
         borderWidth: 2,
-        yAxisID: 'ypH',
-        data: []
+        pointRadius: 2,
+        tension: 0.3,
+        yAxisID: 'y',
       },
       {
         label: 'Turbidity (NTU)',
-        borderColor: '#8B5CF6',
-        backgroundColor: '#8B5CF6',
+        data: history.map((item) => item.turbidity),
+        borderColor: '#a855f7',
+        backgroundColor: 'rgba(168, 85, 247, 0.1)',
         borderWidth: 2,
-        yAxisID: 'yTurb',
-        data: []
-      }
-    ]
+        pointRadius: 2,
+        tension: 0.3,
+        yAxisID: 'y1',
+      },
+    ],
   };
 
   const options = {
+    animation: false,
     responsive: true,
     maintainAspectRatio: false,
     scales: {
       x: {
-        type: 'realtime',
-        realtime: {
-          delay: 1000,
-          refresh: 1000,
-          duration: 60000,
-          onRefresh: (chart) => {
-            if (telemetry) {
-              const now = Date.now();
-              chart.data.datasets[0].data.push({ x: now, y: telemetry.ph || 7.0 });
-              chart.data.datasets[1].data.push({ x: now, y: telemetry.turbidity || 0 });
-            }
-          }
-        },
-        grid: { color: '#1F2937' },
-        ticks: { color: '#9CA3AF' }
+        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+        ticks: { color: '#9ca3af', font: { size: 10 } },
       },
-      ypH: {
+      y: {
         type: 'linear',
         position: 'left',
-        title: { display: true, text: 'pH', color: '#10B981' },
         min: 4,
         max: 10,
-        grid: { color: '#1F2937' },
-        ticks: { color: '#9CA3AF' }
+        title: { display: true, text: 'pH', color: '#10b981' },
+        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+        ticks: { color: '#9ca3af' },
       },
-      yTurb: {
+      y1: {
         type: 'linear',
         position: 'right',
-        title: { display: true, text: 'Turbidity (NTU)', color: '#8B5CF6' },
         min: 0,
         max: 150,
-        grid: { drawOnChartArea: false },
-        ticks: { color: '#9CA3AF' }
-      }
+        title: { display: true, text: 'Turbidity (NTU)', color: '#a855f7' },
+        grid: { display: false },
+        ticks: { color: '#9ca3af' },
+      },
     },
     plugins: {
-      legend: { labels: { color: '#F9FAFB' } }
-    }
+      legend: { labels: { color: '#e5e7eb', font: { size: 11 } } },
+    },
   };
 
   return (
-    <div className="bg-cardbg border border-bordercolor rounded-xl p-5 h-80 w-full">
-      <h3 className="text-sm font-semibold text-gray-300 mb-4">Water Chemistry (pH & Turbidity)</h3>
-      <div className="h-64 w-full">
-        <Line data={chartData} options={options} />
+    <div className="w-full h-64 p-4 bg-slate-900/80 rounded-xl border border-slate-800">
+      <h3 className="text-sm font-semibold text-slate-300 mb-2">Water Chemistry (pH & Turbidity)</h3>
+      <div className="w-full h-48">
+        <Line data={data} options={options} />
       </div>
     </div>
   );

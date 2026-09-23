@@ -1,59 +1,70 @@
-import React from 'react';
-import { Chart as ChartJS } from 'chart.js';
-import { Line } from 'react-chartjs-2';
+'use client';
 
-export default function OpticalKdChart({ telemetry }) {
-  const chartData = {
+import { Line } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend
+);
+
+export default function OpticalKdChart({ history = [] }) {
+  const data = {
+    labels: history.map((item) => item.timestamp),
     datasets: [
       {
         label: 'Attenuation Kd (m⁻¹)',
-        borderColor: '#EF4444',
+        data: history.map((item) => item.kd),
+        borderColor: '#ef4444',
         backgroundColor: 'rgba(239, 68, 68, 0.1)',
         borderWidth: 2,
-        fill: true,
-        data: []
-      }
-    ]
+        pointRadius: 2,
+        tension: 0.3,
+      },
+    ],
   };
 
   const options = {
+    animation: false,
     responsive: true,
     maintainAspectRatio: false,
     scales: {
       x: {
-        type: 'realtime',
-        realtime: {
-          delay: 1000,
-          refresh: 1000,
-          duration: 60000,
-          onRefresh: (chart) => {
-            if (telemetry) {
-              chart.data.datasets[0].data.push({ x: Date.now(), y: telemetry.kd || 0 });
-            }
-          }
-        },
-        grid: { color: '#1F2937' },
-        ticks: { color: '#9CA3AF' }
+        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+        ticks: { color: '#9ca3af', font: { size: 10 } },
       },
       y: {
-        type: 'linear',
-        title: { display: true, text: 'Kd Index (m⁻¹)', color: '#EF4444' },
         min: 0,
         max: 6,
-        grid: { color: '#1F2937' },
-        ticks: { color: '#9CA3AF' }
-      }
+        title: { display: true, text: 'Kd Index (m⁻¹)', color: '#ef4444' },
+        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+        ticks: { color: '#9ca3af' },
+      },
     },
     plugins: {
-      legend: { labels: { color: '#F9FAFB' } }
-    }
+      legend: { labels: { color: '#e5e7eb', font: { size: 11 } } },
+    },
   };
 
   return (
-    <div className="bg-cardbg border border-bordercolor rounded-xl p-5 h-80 w-full">
-      <h3 className="text-sm font-semibold text-gray-300 mb-4">Optical Attenuation (Algae Bloom Indicator Kd)[cite: 1, 2]</h3>
-      <div className="h-64 w-full">
-        <Line data={chartData} options={options} />
+    <div className="w-full h-64 p-4 bg-slate-900/80 rounded-xl border border-slate-800">
+      <h3 className="text-sm font-semibold text-slate-300 mb-2">Optical Attenuation (Algae Bloom Indicator Kd)</h3>
+      <div className="w-full h-48">
+        <Line data={data} options={options} />
       </div>
     </div>
   );

@@ -1,36 +1,59 @@
-import { initializeApp, getApps, getApp } from "firebase/app";
-import { getDatabase, ref, onValue, set, push } from "firebase/database";
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getDatabase, ref, onValue } from 'firebase/database';
+import { calculateEPA_DO, updateEWMA, calculateKd } from './mathModels';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDYU1A0on_2gl5abdAzIya2I6XBADfY5oQ",
-  authDomain: "aeroaqua-v2.firebaseapp.com",
-  databaseURL: "https://aeroaqua-v2-default-rtdb.firebaseio.com",
-  projectId: "aeroaqua-v2",
-  storageBucket: "aeroaqua-v2.firebasestorage.app",
-  messagingSenderId: "66733002593",
-  appId: "1:66733002593:web:297190fe39ad14a6657f20",
-  measurementId: "G-5MJ9D904WM"
+  databaseURL: 'https://aeroaqua-v2-default-rtdb.firebaseio.com',
 };
 
-// Prevent duplicate initialization during Next.js hot reloading
+// Initialize Firebase App
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-export const database = getDatabase(app);
+export const db = getDatabase(app);
 
-// Real-time listener for live ESP8266 sensor telemetry
-export function subscribeToLiveTelemetry(callback) {
-  const liveRef = ref(database, 'telemetry/live');
-  return onValue(liveRef, (snapshot) => {
-    const data = snapshot.val();
-    if (data) callback(data);
-  });
-}
+/**
+ * Subscribes to live telemetry stream and maintains rolling chart history.
+ * @param {Function} setLatestData - State setter for real-time KPI cards.
+ * @param {Function} setHistory - State setter for chart history arrays.
+ */
+export function subscribeToTelemetry(setLatestData, setHistory) {
+  const telemetryRef = ref(db, 'telemetry/live');
 
-// Push incident records for PMMSY Proof-of-Loss compliance[cite: 1, 2]
-export async function logIncidentEvent(incidentData) {
-  const logRef = ref(database, 'telemetry/incidents');
-  const newLogRef = push(logRef);
-  await set(newLogRef, {
-    ...incidentData,
-    timestamp: new Date().toISOString()
+  return onValue(telemetryRef, (snapshot) => {
+    const rawData = snapshot.val();
+    if (!rawData) return;
+
+    const timestamp = new Date().toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+
+    // Run math models on incoming telemetry payload
+    const doSat = calculateEPA_DO(rawData.temperature || 25);
+    const ewmaTemp = updateEWMA(rawData.temperature || 25);
+    const kd = calculateKd(rawData.surfaceLight || 800, rawData.submergedLight || 350);
+
+    const newPoint = {
+      timestamp,
+      temperature: rawData.temperature ?? 0,
+      ph: rawData.ph ?? 7,
+      turbidity: rawData.turbidity ?? 0,
+      surfaceLight: rawData.surfaceLight ?? 0,
+      submergedLight: rawData.submergedLight ?? 0,
+      pumpStatus: rawData.pumpStatus ?? 0,
+      solenoidStatus: rawData.solenoidStatus ?? 0,
+      estimatedDo: doSat.do,
+      ewmaBaseline: ewmaTemp,
+      kd: kd,
+    };
+
+    // Update real-time KPI state
+    setLatestData(newPoint);
+
+    // Append to rolling history array (max 30 points)
+    setHistory((prev) => {
+      const updated = [...prev, newPoint];
+      return updated.length > 30 ? updated.slice(updated.length - 30) : updated;
+    });
   });
 }
